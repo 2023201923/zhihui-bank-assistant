@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+pydantic
+openai
+# 2026-10-08 新增：适老版语音播报
+# edge-tts：微软神经网络语音（晓晓）。7.3.1 起使用新的语音握手，否则会被拒绝。
+# pyttsx3：没有网络时退回 Windows 离线语音
+edge-tts>=7.3.1
+miniaudio
+pyttsx3

@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+bank.db
+*.db
+.DS_Store
+.env
+*.log
+.idea/
+.vscode/
+tts_cache/
+
+# 第三方参考资料（光大银行产品资料），不纳入版本库
+AI-理财推荐.doc
+

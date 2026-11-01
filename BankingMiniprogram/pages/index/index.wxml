@@ -1,0 +1,934 @@
+<view class="page-wrapper {{uiMode === 'elder' ? 'elder-mode' : ''}}">
+  <view class="login-screen" wx:if="{{!loggedIn}}">
+    <view class="login-brand">
+      <image class="login-mark" src="/images/logo-mark.png" mode="aspectFit"></image>
+      <text class="login-title">智汇银行</text>
+    </view>
+    <text class="login-sub">请使用开户手机号或用户号登录。</text>
+
+    <view class="login-field">
+      <text class="login-label">手机号 / 用户号</text>
+      <input
+        class="login-input"
+        value="{{loginAccount}}"
+        placeholder="例如 13800001111"
+        placeholder-class="input-placeholder"
+        bindinput="onLoginAccount"
+      />
+    </view>
+    <view class="login-field">
+      <text class="login-label">登录密码</text>
+      <input
+        class="login-input"
+        password
+        maxlength="6"
+        value="{{loginPassword}}"
+        placeholder="6 位数字密码"
+        placeholder-class="input-placeholder"
+        bindinput="onLoginPassword"
+        bindconfirm="submitLogin"
+      />
+    </view>
+    <text class="login-error" wx:if="{{loginError}}">{{loginError}}</text>
+    <button class="login-btn" bindtap="submitLogin">登录</button>
+  </view>
+
+  <block wx:else>
+  <!-- 顶部导航：身份与余额一行，操作按钮单独一行，避免姓名被挤掉 -->
+  <view class="top-nav">
+    <view class="nav-main">
+      <view class="nav-left">
+        <image class="nav-mark" src="/images/logo-mark.png" mode="aspectFit"></image>
+        <view class="nav-meta">
+          <text class="nav-bank">智汇银行</text>
+          <text class="nav-user-name">{{userName}}</text>
+        </view>
+      </view>
+      <view class="asset-badge">
+        <text class="asset-label">可用活期</text>
+        <text class="asset-val">¥{{balance}}</text>
+      </view>
+    </view>
+    <view class="nav-actions">
+      <text class="nav-voice {{voiceOn ? 'on' : ''}}" bindtap="toggleVoice">{{voiceOn ? '语音开' : '语音关'}}</text>
+      <text class="nav-mode" bindtap="toggleUiMode">{{uiMode === 'elder' ? '普通版' : '适老版'}}</text>
+      <text class="nav-logout" bindtap="logout">退出</text>
+    </view>
+  </view>
+
+  <!-- 对话滚动区域 -->
+  <scroll-view 
+    scroll-y 
+    class="dialogue-scroll" 
+    scroll-into-view="{{lastMsgId}}" 
+    scroll-with-animation
+    enable-back-to-top>
+    
+    <view class="dialogue-list">
+      <block wx:for="{{messages}}" wx:for-index="mIdx" wx:key="mIdx">
+
+        <!-- 用户发言 -->
+        <view id="msg-{{mIdx}}" class="chat-row user-row" wx:if="{{item.role === 'user'}}">
+          <view class="msg-bubble user-bubble">
+            <text>{{item.text}}</text>
+          </view>
+          <view class="user-avatar-wrap">
+            <text class="avatar-text">我</text>
+          </view>
+        </view>
+
+        <!-- AI助理发言 -->
+        <view id="msg-{{mIdx}}" class="chat-row ai-row" wx:if="{{item.role === 'assistant'}}">
+          <view class="ai-avatar-wrap">
+            <image class="avatar-logo" src="/images/avatar-assistant.png" mode="aspectFill"></image>
+          </view>
+          <view class="msg-content">
+
+            <!-- 1. 引导菜单卡片 -->
+            <view class="card-box menu-card" wx:if="{{item.type === 'WELCOME_CARD'}}">
+              <view class="menu-intro">
+                <text class="intro-title">{{userName}}，欢迎回来</text>
+                <text class="intro-desc">请选择下方业务场景体验，或直接在输入框中语音/文字对话：</text>
+              </view>
+              <view class="menu-actions">
+                <!-- 修改这里：将完整指令改为意图短语“我想办理转账” -->
+                <view class="action-chip" hover-class="chip-hover" bindtap="sendQuickPrompt" data-text="我想办理转账业务">
+                  <text class="chip-icon chip-icon--transfer">转</text>
+                  <text class="chip-label">智能转账</text>
+                </view>
+                <view class="action-chip" hover-class="chip-hover" bindtap="sendQuickPrompt" data-text="查询我的账单和消费分析">
+                  <text class="chip-icon chip-icon--bill">账</text>
+                  <text class="chip-label">账单分析</text>
+                </view>
+                <view class="action-chip" hover-class="chip-hover" bindtap="sendQuickPrompt" data-text="查看理财产品推荐与风险测评">
+                  <text class="chip-icon chip-icon--wealth">财</text>
+                  <text class="chip-label">理财操作</text>
+                </view>
+                <view class="action-chip" hover-class="chip-hover" bindtap="sendQuickPrompt" data-text="查看我的理财画像">
+                  <text class="chip-icon chip-icon--profile">像</text>
+                  <text class="chip-label">理财画像</text>
+                </view>
+                <view class="action-chip" hover-class="chip-hover" bindtap="sendQuickPrompt" data-text="查询我的银行卡与额度管理">
+                  <text class="chip-icon chip-icon--card">卡</text>
+                  <text class="chip-label">卡片管理</text>
+                </view>
+                <view class="action-chip" hover-class="chip-hover" bindtap="sendQuickPrompt" data-text="查看免密代扣与自动续费服务">
+                  <text class="chip-icon chip-icon--sub">订</text>
+                  <text class="chip-label">订阅代扣</text>
+                </view>
+                <view class="action-chip" hover-class="chip-hover" bindtap="sendQuickPrompt" data-text="我想存一笔心愿备用金，到用钱日再提醒我">
+                  <text class="chip-icon chip-icon--cross">愿</text>
+                  <text class="chip-label">心愿备用金</text>
+                </view>
+                <!-- 2026-10-08 新增：适老版防骗提醒（亲情反诈守护）入口 -->
+                <view class="action-chip" hover-class="chip-hover" bindtap="sendQuickPrompt" data-text="查看我的安全防护与反诈预警">
+                  <text class="chip-icon chip-icon--safety">盾</text>
+                  <text class="chip-label">防骗提醒</text>
+                </view>
+              </view>
+            </view>
+
+            <!-- 2. 普通文本回复 -->
+            <view class="msg-bubble ai-bubble" wx:if="{{item.type === 'TEXT'}}">
+              <text>{{item.text}}</text>
+            </view>
+            <!-- 2026-10-23 新增：请求失败时给一个重试入口，不用客户重新打字 -->
+            <view class="retry-row" wx:if="{{item.retryText}}">
+              <view class="retry-btn" bindtap="retryMessage" data-text="{{item.retryText}}">重新发送</view>
+            </view>
+            <!-- 用 view 接收点击。data-mid 带前缀，避免序号 0 被当成空值丢掉 -->
+            <view class="speak-btn" wx:if="{{item.role === 'assistant' && item.type !== 'WELCOME_CARD'}}" catchtap="speakMessage" data-mid="m{{mIdx}}">🔊 朗读</view>
+
+            <!-- 2.1 兜底：带文本但未匹配到卡片模板的回复，避免只剩头像 -->
+            <view
+              class="msg-bubble ai-bubble"
+              wx:if="{{item.role === 'assistant' && item.text && item.type !== 'TEXT' && !item.cardData}}">
+              <text>{{item.text}}</text>
+            </view>
+
+            <!-- 3. 信息展示卡片（账单、卡片、订阅等，说明包在卡片内） -->
+            <view class="card-box info-card" wx:if="{{item.type === 'INFO_CARD' && item.cardData}}">
+              <view class="card-title-bar">
+                <view class="title-left">
+                  <view class="status-dot info-dot"></view>
+                  <text class="card-title">{{item.cardData.title}}</text>
+                </view>
+              </view>
+              <text class="card-intro" wx:if="{{item.text}}">{{item.text}}</text>
+
+              <view class="asset-item-list" wx:if="{{item.cardData.items && item.cardData.items.length}}">
+                <view class="asset-item" wx:for="{{item.cardData.items}}" wx:for-item="row" wx:key="title">
+                  <view class="asset-item-head">
+                    <view>
+                      <text class="asset-item-title">{{row.title}}</text>
+                      <text class="asset-item-kicker" wx:if="{{row.kicker}}">{{row.kicker}}</text>
+                    </view>
+                    <text class="asset-item-value">{{row.value}}</text>
+                  </view>
+                  <view class="asset-item-foot">
+                    <text class="asset-item-meta">{{row.meta}}</text>
+                    <text class="asset-item-badge" wx:if="{{row.badge}}">{{row.badge}}</text>
+                  </view>
+                </view>
+              </view>
+
+              <view class="info-sections" wx:if="{{item.cardData.sections && item.cardData.sections.length}}">
+                <view class="info-row" wx:for="{{item.cardData.sections}}" wx:for-item="sec" wx:key="label">
+                  <text class="data-key">{{sec.label}}</text>
+                  <view class="info-row-right">
+                    <text class="data-val bold">{{sec.value}}</text>
+                    <text class="info-percent" wx:if="{{sec.percent > 0}}">{{sec.percent}}%</text>
+                  </view>
+                </view>
+              </view>
+              <view class="highlight-box" wx:if="{{item.cardData.highlights && item.cardData.highlights.length}}">
+                <text class="highlight-title">智能提示</text>
+                <text class="highlight-line" wx:for="{{item.cardData.highlights}}" wx:for-item="hl" wx:key="*this">{{hl}}</text>
+              </view>
+              <view class="highlight-box muted" wx:if="{{item.cardData.extra_title}}">
+                <text class="highlight-title">{{item.cardData.extra_title}}</text>
+                <text class="highlight-line" wx:for="{{item.cardData.extra_rows}}" wx:for-item="row" wx:key="*this">{{row}}</text>
+              </view>
+              <!-- 2026-10-06 新增：额度不足时的一键引导（调额 / 查卡） -->
+              <view class="limit-actions" wx:if="{{item.cardData.quick_actions && item.cardData.quick_actions.length}}">
+                <text class="limit-title">可执行的下一步</text>
+                <view class="limit-action-row">
+                  <view
+                    class="action-chip"
+                    wx:for="{{item.cardData.quick_actions}}"
+                    wx:for-item="act"
+                    wx:key="label"
+                    hover-class="chip-hover"
+                    bindtap="sendQuickPrompt"
+                    data-text="{{act.text}}">
+                    <text class="chip-label">{{act.label}}</text>
+                  </view>
+                </view>
+              </view>
+            </view>
+
+            <!-- 2026-10-06 新增：理财画像卡（风险画像 + 现金流画像 + 持仓 + 配置建议） -->
+            <view class="profile-card" wx:if="{{item.type === 'PROFILE_CARD' && item.cardData}}">
+              <view class="card-title-bar">
+                <view class="title-left">
+                  <view class="status-dot profile-dot"></view>
+                  <text class="card-title">{{item.cardData.title || '我的理财画像'}}</text>
+                </view>
+                <text class="card-tag">{{item.cardData.style}}</text>
+              </view>
+              <text class="card-intro" wx:if="{{item.text}}">{{item.text}}</text>
+
+              <view class="profile-tags" wx:if="{{item.cardData.tags && item.cardData.tags.length}}">
+                <text class="profile-tag" wx:for="{{item.cardData.tags}}" wx:for-item="tag" wx:key="*this">{{tag}}</text>
+              </view>
+
+              <view class="profile-alloc" wx:if="{{item.cardData.allocation && item.cardData.allocation.length}}">
+                <text class="limit-title">建议配置比例</text>
+                <view class="alloc-row" wx:for="{{item.cardData.allocation}}" wx:for-item="alloc" wx:key="bucket">
+                  <text class="alloc-name">{{alloc.bucket}}</text>
+                  <view class="alloc-bar">
+                    <view class="alloc-fill" style="width: {{alloc.percent}}%"></view>
+                  </view>
+                  <text class="alloc-val">{{alloc.percent}}%</text>
+                </view>
+                <!-- 2026-10-08：适老版隐藏配置建议的长解释，只留比例 -->
+                <text class="alloc-hint" wx:if="{{uiMode !== 'elder'}}" wx:for="{{item.cardData.allocation}}" wx:for-item="alloc" wx:key="bucket">{{alloc.bucket}}：{{alloc.hint}}</text>
+              </view>
+
+              <view class="data-table">
+                <view class="data-row" wx:for="{{item.cardData.sections}}" wx:for-item="sec" wx:key="label">
+                  <text class="data-key">{{sec.label}}</text>
+                  <text class="data-val bold">{{sec.value}}</text>
+                </view>
+              </view>
+
+              <view class="highlight-box muted" wx:if="{{item.cardData.holding_line && uiMode !== 'elder'}}">
+                <text class="highlight-title">持仓明细</text>
+                <text class="highlight-line">{{item.cardData.holding_line}}</text>
+              </view>
+
+              <view class="limit-actions" wx:if="{{item.cardData.quick_actions && item.cardData.quick_actions.length}}">
+                <text class="limit-title">可执行的下一步</text>
+                <view class="limit-action-row">
+                  <view
+                    class="action-chip"
+                    wx:for="{{item.cardData.quick_actions}}"
+                    wx:for-item="act"
+                    wx:key="label"
+                    hover-class="chip-hover"
+                    bindtap="sendQuickPrompt"
+                    data-text="{{act.text}}">
+                    <text class="chip-label">{{act.label}}</text>
+                  </view>
+                </view>
+              </view>
+
+              <text class="profile-disclosure" wx:if="{{item.cardData.risk_disclosure}}">{{item.cardData.risk_disclosure}}</text>
+            </view>
+
+            <!-- 2026-10-08 新增：适老版安全防护卡（紧急联系人绑定 + 反诈预警记录） -->
+            <view class="guardian-card" wx:if="{{item.type === 'GUARDIAN_CARD' && item.cardData}}">
+              <view class="card-title-bar">
+                <view class="title-left">
+                  <view class="status-dot guardian-dot"></view>
+                  <text class="card-title">安全防护 · 亲情提醒</text>
+                </view>
+              </view>
+              <text class="card-intro" wx:if="{{item.text}}">{{item.text}}</text>
+
+              <view class="guardian-status" wx:if="{{item.cardData.bound}}">
+                <text class="guardian-name">{{item.cardData.guardian.relation}}{{item.cardData.guardian.name}}</text>
+                <text class="guardian-phone">{{item.cardData.guardian.phone_masked}}</text>
+                <text class="guardian-badge">已绑定 · 高风险转账会短信通知TA</text>
+              </view>
+              <view class="guardian-status empty" wx:else>
+                <text class="guardian-badge">尚未绑定紧急联系人</text>
+              </view>
+
+              <view class="guardian-form">
+                <text class="guardian-form-title">填写家人信息即可绑定 / 修改</text>
+                <view class="guardian-rel-row">
+                  <text
+                    class="guardian-rel-chip {{guardianForm.relation === rel ? 'selected' : ''}}"
+                    wx:for="{{item.cardData.relations}}"
+                    wx:for-item="rel"
+                    wx:key="*this"
+                    bindtap="selectGuardianRelation"
+                    data-value="{{rel}}">{{rel}}</text>
+                </view>
+                <input
+                  class="guardian-input"
+                  value="{{guardianForm.name}}"
+                  placeholder="家人姓名，如 周可"
+                  placeholder-class="input-placeholder"
+                  bindinput="onGuardianField"
+                  data-field="name"
+                />
+                <input
+                  class="guardian-input"
+                  type="number"
+                  maxlength="11"
+                  value="{{guardianForm.phone}}"
+                  placeholder="家人手机号（11 位）"
+                  placeholder-class="input-placeholder"
+                  bindinput="onGuardianField"
+                  data-field="phone"
+                />
+                <button class="guardian-save-btn" bindtap="saveGuardian">保存并启用提醒</button>
+              </view>
+
+              <view class="guardian-alert-list" wx:if="{{item.cardData.alerts && item.cardData.alerts.length}}">
+                <text class="limit-title">最近的预警通知</text>
+                <view class="guardian-alert-item" wx:for="{{item.cardData.alerts}}" wx:for-item="al" wx:key="alert_id">
+                  <text class="guardian-alert-time">{{al.created_at}}</text>
+                  <text class="guardian-alert-text">{{al.title}}：{{al.message}}</text>
+                </view>
+              </view>
+
+              <view class="highlight-box" wx:if="{{item.cardData.tips && item.cardData.tips.length}}">
+                <text class="highlight-title">防骗提醒</text>
+                <text class="highlight-line" wx:for="{{item.cardData.tips}}" wx:for-item="tip" wx:key="*this">{{tip}}</text>
+              </view>
+            </view>
+
+            <view class="msg-bubble ai-bubble" wx:if="{{item.type === 'SURVEY_CARD' && item.text}}">
+              <text>{{item.text}}</text>
+            </view>
+
+            <view class="survey-card" wx:if="{{item.type === 'SURVEY_CARD' && item.cardData}}">
+              <view class="survey-head">
+                <text class="survey-title">{{item.cardData.title}}</text>
+                <text class="survey-sub">{{item.cardData.subtitle}}</text>
+              </view>
+
+              <view class="survey-block">
+                <text class="survey-q-title">职业（用于流动性匹配）</text>
+                <view class="survey-occ-grid">
+                  <view
+                    wx:for="{{item.cardData.occupations}}"
+                    wx:for-item="occ"
+                    wx:key="value"
+                    class="survey-occ-chip {{item.cardData.occupation === occ.value ? 'selected' : ''}}"
+                    bindtap="selectOccupation"
+                    data-index="{{mIdx}}"
+                    data-value="{{occ.value}}">
+                    {{occ.label}}
+                  </view>
+                </view>
+              </view>
+
+              <view class="survey-block" wx:for="{{item.cardData.questions}}" wx:for-item="q" wx:key="id">
+                <text class="survey-q-title">{{q.no}}. {{q.title}}</text>
+                <view class="survey-opts">
+                  <view
+                    wx:for="{{q.options}}"
+                    wx:for-item="opt"
+                    wx:key="key"
+                    class="survey-opt {{item.cardData.answers[q.id] === opt.key ? 'selected' : ''}}"
+                    bindtap="selectSurveyOption"
+                    data-index="{{mIdx}}"
+                    data-qid="{{q.id}}"
+                    data-value="{{opt.key}}">
+                    <text class="opt-key">{{opt.key}}</text>
+                    <text class="opt-text">{{opt.text}}</text>
+                  </view>
+                </view>
+              </view>
+
+              <!-- 2026-10-08：适老版隐藏分值区间释义等长说明 -->
+              <view class="survey-legend" wx:if="{{uiMode !== 'elder'}}">
+                <text class="explain-title">分值区间与风险类型</text>
+                <view class="legend-row" wx:for="{{item.cardData.score_bands}}" wx:for-item="band" wx:key="type">
+                  <text class="legend-range">{{band.range}}</text>
+                  <text class="legend-desc">{{band.type}} {{band.level}} · 适合{{band.suitable}}</text>
+                </view>
+                <text class="explain-title" style="margin-top: 12rpx;">产品风险评级释义</text>
+                <text class="legend-fit" wx:for="{{item.cardData.product_risk_legend}}" wx:for-item="lg" wx:key="level">{{lg.level}}：{{lg.desc}}</text>
+              </view>
+
+              <button class="cmb-buy-btn" catchtap="submitRiskSurvey" data-index="{{mIdx}}">提交评估</button>
+            </view>
+
+            <!-- 4. 操作确认卡片（转账 / 理财 / 卡片 / 订阅 / 联动） -->
+            <view class="card-box transfer-card" wx:if="{{item.type === 'ACTION_CARD' && item.cardData}}">
+              <view class="card-title-bar">
+                <view class="title-left">
+                  <view class="status-dot"></view>
+                  <text class="card-title">{{item.cardData.card_title || '业务确认单'}}</text>
+                </view>
+                <text class="card-tag">待确认</text>
+              </view>
+              <text class="card-intro" wx:if="{{item.text}}">{{item.text}}</text>
+
+              <view class="amount-hero" wx:if="{{item.cardData.amount}}">
+                <text class="currency">¥</text>
+                <text class="amount-number">{{item.cardData.amount}}</text>
+              </view>
+
+              <view class="data-table">
+                <view class="data-row" wx:if="{{item.cardData.payee}}">
+                  <text class="data-key">收款人</text>
+                  <text class="data-val bold">{{item.cardData.payee}}</text>
+                </view>
+                <view class="data-row" wx:if="{{item.cardData.payee_card}}">
+                  <text class="data-key">收款卡号</text>
+                  <text class="data-val bold">{{item.cardData.payee_card}}</text>
+                </view>
+                <view class="data-row" wx:if="{{item.cardData.payee_hint}}">
+                  <text class="data-key">到账方式</text>
+                  <text class="data-val">{{item.cardData.payee_hint}}</text>
+                </view>
+                <view class="data-row" wx:if="{{item.cardData.product_name}}">
+                  <text class="data-key">理财产品</text>
+                  <text class="data-val bold">{{item.cardData.product_name}}</text>
+                </view>
+                <view class="data-row" wx:if="{{item.cardData.yield}}">
+                  <text class="data-key">业绩基准</text>
+                  <text class="data-val">{{item.cardData.yield}}</text>
+                </view>
+                <view class="data-row" wx:if="{{item.cardData.term}}">
+                  <text class="data-key">运作期限</text>
+                  <text class="data-val">{{item.cardData.term}}</text>
+                </view>
+                <view class="data-row" wx:if="{{item.cardData.merchant}}">
+                  <text class="data-key">订阅商户</text>
+                  <text class="data-val bold">{{item.cardData.merchant}}</text>
+                </view>
+                <view class="data-row" wx:if="{{item.cardData.billing_cycle}}">
+                  <text class="data-key">扣费周期</text>
+                  <text class="data-val">{{item.cardData.billing_cycle}}</text>
+                </view>
+                <view class="data-row" wx:if="{{item.cardData.card_id}}">
+                  <text class="data-key">银行卡</text>
+                  <text class="data-val">{{item.cardData.card_id}}</text>
+                </view>
+                <view class="data-row" wx:if="{{item.cardData.action_label}}">
+                  <text class="data-key">操作类型</text>
+                  <text class="data-val bold">{{item.cardData.action_label}}</text>
+                </view>
+                <view class="data-row" wx:if="{{item.cardData.new_limit_text}}">
+                  <text class="data-key">调整为</text>
+                  <text class="data-val bold">{{item.cardData.new_limit_text}}</text>
+                </view>
+                <view class="data-row" wx:if="{{item.cardData.beneficiary}}">
+                  <text class="data-key">受益人</text>
+                  <text class="data-val bold">{{item.cardData.beneficiary}}</text>
+                </view>
+                <view class="data-row" wx:if="{{item.cardData.notes}}">
+                  <text class="data-key">备注</text>
+                  <text class="data-val">{{item.cardData.notes}}</text>
+                </view>
+                <view class="data-row" wx:if="{{item.cardData.target_date}}">
+                  <text class="data-key">用钱日</text>
+                  <text class="data-val">{{item.cardData.target_date}}</text>
+                </view>
+                <view class="data-row" wx:if="{{item.cardData.auto_redeem_date}}">
+                  <text class="data-key">赎回日</text>
+                  <text class="data-val">{{item.cardData.auto_redeem_date}}</text>
+                </view>
+                <view class="data-row data-row--note" wx:if="{{item.cardData.automation}}">
+                  <text class="data-key">到期安排</text>
+                  <text class="data-val">{{item.cardData.automation}}</text>
+                </view>
+              </view>
+
+              <!-- 2026-10-06 新增：转账额度面板（卡片状态 / 单笔 / 日累计 / 日笔数 / 年度剩余） -->
+              <view class="limit-box" wx:if="{{item.cardData.limit_info && item.cardData.limit_info.lines.length}}">
+                <text class="limit-title">转账额度校验</text>
+                <text class="limit-line" wx:for="{{item.cardData.limit_info.lines}}" wx:for-item="line" wx:key="*this">{{line}}</text>
+                <view class="limit-warn" wx:if="{{item.cardData.limit_warnings && item.cardData.limit_warnings.length}}">
+                  <text class="limit-warn-line" wx:for="{{item.cardData.limit_warnings}}" wx:for-item="lw" wx:key="*this">{{lw}}</text>
+                </view>
+              </view>
+
+              <view class="pay-source" wx:if="{{item.cardData.payment_cards && item.cardData.payment_cards.length}}">
+                <text class="pay-source-title">付款方式</text>
+                <view
+                  class="pay-source-item {{item.cardData.selected_card_id === src.card_id ? 'selected' : ''}} {{src.payable ? '' : 'disabled'}}"
+                  wx:for="{{item.cardData.payment_cards}}"
+                  wx:for-item="src"
+                  wx:key="card_id"
+                  bindtap="selectPayCard"
+                  data-index="{{mIdx}}"
+                  data-cardid="{{src.card_id}}"
+                  data-payable="{{src.payable ? 1 : 0}}">
+                  <view class="pay-source-main">
+                    <text class="pay-source-name">{{src.card_type}}</text>
+                    <text class="pay-source-id">{{src.card_id}}</text>
+                  </view>
+                  <view class="pay-source-side">
+                    <text class="pay-source-cap">{{src.caption}}</text>
+                    <text class="pay-source-reason" wx:if="{{src.reason}}">{{src.reason}}</text>
+                  </view>
+                </view>
+              </view>
+
+              <view class="fraud-box {{item.cardData.fraud.level}}" wx:if="{{item.cardData.fraud && item.cardData.fraud.level !== 'normal'}}">
+                <text class="fraud-title">{{item.cardData.fraud.title}}</text>
+                <text class="fraud-line" wx:for="{{item.cardData.fraud.warnings}}" wx:for-item="warn" wx:key="*this">{{warn}}</text>
+              </view>
+
+              <!-- 2026-10-08 新增：高风险转账的亲情预警结果（已通知 / 建议绑定家人） -->
+              <view class="guardian-alert" wx:if="{{item.cardData.guardian_alert && item.cardData.guardian_alert.sent}}">
+                <text class="guardian-alert-title">✅ 已通知您的家人</text>
+                <text class="guardian-alert-line">已短信通知{{item.cardData.guardian_alert.guardian.relation}}{{item.cardData.guardian_alert.guardian.name}}（{{item.cardData.guardian_alert.guardian.phone_masked}}）</text>
+                <text class="guardian-alert-line">预警内容：{{item.cardData.guardian_alert.sms_text}}</text>
+              </view>
+              <view class="guardian-alert muted" wx:if="{{item.cardData.guardian_alert && !item.cardData.guardian_alert.sent}}">
+                <text class="guardian-alert-title">建议绑定家人一起把关</text>
+                <text class="guardian-alert-line">您还没有绑定紧急联系人。绑定后，高风险转账会自动短信通知家人。</text>
+                <view class="limit-action-row">
+                  <view class="action-chip" hover-class="chip-hover" bindtap="sendQuickPrompt" data-text="查看我的安全防护与反诈预警">
+                    <text class="chip-label">去绑定家人</text>
+                  </view>
+                </view>
+              </view>
+
+              <view class="card-btn-box card-btn-row">
+                <button 
+                  class="custom-secondary-btn {{item.confirmed || item.cancelled ? 'is-disabled' : ''}}" 
+                  bindtap="cancelOrder" 
+                  data-orderid="{{item.cardData.order_id}}"
+                  data-index="{{mIdx}}"
+                  disabled="{{item.confirmed || item.cancelled}}">
+                  {{item.cancelled ? '已取消' : '取消'}}
+                </button>
+                <button 
+                  class="custom-primary-btn {{item.confirmed || item.cancelled ? 'is-disabled' : ''}}" 
+                  bindtap="confirmOrder" 
+                  data-orderid="{{item.cardData.order_id}}"
+                  data-index="{{mIdx}}"
+                  disabled="{{item.confirmed || item.cancelled}}">
+                  {{item.confirmed ? '✓ 已完成' : (item.cardData.requires_password ? '输入密码并确认' : (item.cardData.confirm_label || '确认办理'))}}
+                </button>
+              </view>
+            </view>
+
+            <view class="msg-bubble ai-bubble" wx:if="{{item.type === 'WEALTH_CATALOG_CARD' && item.text && item.cardData.catalog_mode !== 'recommend'}}">
+              <text>{{item.text}}</text>
+            </view>
+
+            <!-- 理财产品精选货架 -->
+            <view class="wealth-shelf-container {{item.cardData.catalog_mode === 'recommend' ? 'recommend-mode' : ''}}" wx:if="{{item.type === 'WEALTH_CATALOG_CARD'}}">
+              <view class="shelf-header">
+                <view class="shelf-title">{{item.cardData.catalog_mode === 'recommend' ? '画像匹配 · 金选推荐' : '今日严选 · 金选理财'}}</view>
+                <view class="shelf-subtitle">{{item.cardData.style || '点击产品查看详情'}}</view>
+              </view>
+
+              <view class="recommend-panel" wx:if="{{item.cardData.catalog_mode === 'recommend'}}">
+                <text class="recommend-headline">{{item.cardData.headline || item.text}}</text>
+                <!-- 2026-10-08：适老版不展示成段的推荐理由，减少阅读量 -->
+                <view class="explain-chips" wx:if="{{uiMode !== 'elder'}}">
+                  <text class="explain-chip" wx:for="{{item.cardData.explain}}" wx:for-item="line" wx:key="*this">{{line}}</text>
+                </view>
+              </view>
+
+              <scroll-view scroll-x class="shelf-scroll-x {{item.cardData.catalog_mode === 'recommend' ? 'recommend-track' : ''}}" show-scrollbar="{{false}}">
+                <view class="shelf-track">
+                <block wx:for="{{item.cardData.products}}" wx:for-item="prod" wx:key="product_id">
+                  <view class="bank-wealth-card uniform-card">
+                    <view class="card-main" bindtap="triggerProductDetail" data-pname="{{prod.name}}">
+                      <view class="prod-top">
+                        <text class="prod-name">{{prod.name}}</text>
+                        <text class="prod-subtag">{{prod.sub_category}}</text>
+                      </view>
+
+                      <view class="prod-highlight-grid">
+                        <view class="rate-col">
+                          <text class="rate-val">{{prod.yield_pct}}</text>
+                          <text class="rate-caption">{{prod.yield_label}}</text>
+                        </view>
+                        <view class="term-col">
+                          <view class="term-tag">{{prod.term_label}}</view>
+                          <text class="term-caption">{{prod.term_sub_label}}</text>
+                        </view>
+                      </view>
+
+                      <!-- 2026-10-08 新增：适老版只保留关键信息，去掉大段说明书式文案 -->
+                      <view class="elder-prod-brief" wx:if="{{uiMode === 'elder'}}">
+                        <text class="elder-brief-line">期限：{{prod.term_label}}</text>
+                        <text class="elder-brief-line">起购：¥{{prod.min_amount}}</text>
+                        <text class="elder-brief-line">风险：{{prod.risk_label}}</text>
+                      </view>
+
+                      <view class="benchmark-box benchmark-box--full" wx:if="{{uiMode !== 'elder'}}">
+                        <view class="benchmark-row">
+                          <text class="benchmark-label">业绩比较基准</text>
+                          <text class="benchmark-text">{{prod.benchmark_desc}}</text>
+                        </view>
+                        <view class="benchmark-row">
+                          <text class="benchmark-label">投资投向</text>
+                          <text class="benchmark-text">{{prod.asset_direction}}</text>
+                        </view>
+                      </view>
+
+                      <view class="prod-tags-row tags-fixed" wx:if="{{uiMode !== 'elder'}}">
+                        <text class="risk-badge">{{prod.risk_label}}</text>
+                        <block wx:for="{{prod.tags}}" wx:for-item="tag" wx:key="*this">
+                          <text class="feature-tag" wx:if="{{index < 2}}">{{tag}}</text>
+                        </block>
+                      </view>
+
+                      <view class="card-spacer"></view>
+
+                      <block wx:if="{{uiMode !== 'elder'}}">
+                        <view class="match-reason match-fixed" wx:if="{{prod.reason}}">{{prod.reason}}</view>
+                        <view class="match-reason match-fixed placeholder" wx:else>已纳入您的风险与流动性匹配池</view>
+                      </block>
+                    </view>
+
+                    <view class="card-footer">
+                      <text class="detail-entry" bindtap="triggerProductDetail" data-pname="{{prod.name}}">查看详情</text>
+                      <view class="buy-action-bar">
+                        <button
+                          class="cmb-buy-btn"
+                          catchtap="triggerQuickBuy"
+                          data-pid="{{prod.product_id}}"
+                          data-pname="{{prod.name}}"
+                          data-min="{{prod.min_amount}}">
+                          点击购买 (¥{{prod.min_amount}}起)
+                        </button>
+                      </view>
+                    </view>
+                  </view>
+                </block>
+                </view>
+              </scroll-view>
+
+              <!-- 2026-10-15 新增：理财经理口吻的确认口 + 「不满意」出口。
+                   客户想找人，往往只是因为除了接受没有别的动作可做。 -->
+              <view class="reco-confirm" wx:if="{{item.cardData.catalog_mode === 'recommend' && item.cardData.confirm_line}}">
+                <text class="reco-confirm-text">{{item.cardData.confirm_line}}</text>
+              </view>
+              <view
+                class="limit-actions"
+                wx:if="{{item.cardData.catalog_mode === 'recommend' && item.cardData.quick_actions && item.cardData.quick_actions.length}}">
+                <text class="limit-title">也可以这样调整</text>
+                <view class="limit-action-row">
+                  <view
+                    class="action-chip"
+                    wx:for="{{item.cardData.quick_actions}}"
+                    wx:for-item="act"
+                    wx:key="label"
+                    hover-class="chip-hover"
+                    bindtap="sendQuickPrompt"
+                    data-text="{{act.text}}">
+                    <text class="chip-label">{{act.label}}</text>
+                  </view>
+                </view>
+              </view>
+            </view>
+
+            <view class="msg-bubble ai-bubble" wx:if="{{item.type === 'WEALTH_DETAIL_CARD' && item.text}}">
+              <text>{{item.text}}</text>
+            </view>
+
+            <view class="wealth-detail" wx:if="{{item.type === 'WEALTH_DETAIL_CARD' && item.cardData.product}}">
+              <view class="risk-disclosure">
+                <text class="risk-disclosure-tag">风险揭示</text>
+                <text class="risk-disclosure-text">{{item.cardData.risk_disclosure}}</text>
+              </view>
+
+              <view class="detail-head">
+                <text class="detail-name">{{item.cardData.product.name}}</text>
+                <text class="detail-code">{{item.cardData.product.product_code}}</text>
+              </view>
+              <view class="detail-slogan-row">
+                <text class="prod-subtag">{{item.cardData.product.sub_category}}</text>
+                <text class="detail-slogan">{{item.cardData.product.slogan}}</text>
+              </view>
+              <view class="detail-highlights">
+                <text wx:for="{{item.cardData.product.highlights}}" wx:for-item="mark" wx:key="*this" class="detail-check">{{mark}}</text>
+              </view>
+
+              <view class="prod-highlight-grid">
+                <view class="rate-col">
+                  <text class="rate-val">{{item.cardData.product.yield_pct}}</text>
+                  <text class="rate-caption">{{item.cardData.product.yield_label}}</text>
+                </view>
+                <view class="term-col">
+                  <view class="term-tag">{{item.cardData.product.term_label}}</view>
+                  <text class="term-caption">投资期限 · {{item.cardData.product.term_sub_label}}</text>
+                </view>
+              </view>
+
+              <view class="benchmark-box">
+                <text class="benchmark-title">业绩比较基准</text>
+                <text class="benchmark-text">{{item.cardData.product.benchmark_desc}}</text>
+              </view>
+
+              <view class="detail-meta">{{item.cardData.product.risk_label}} | {{item.cardData.product.min_amount}}元起购 | {{item.cardData.product.buyer_count}}</view>
+              <view class="prod-tags-row">
+                <text wx:for="{{item.cardData.product.tags}}" wx:for-item="tag" wx:key="*this" class="feature-tag">{{tag}}</text>
+              </view>
+
+              <!-- 2026-10-08：适老版隐藏大段说明书内容，只留关键信息与购买按钮 -->
+              <view class="elder-detail-note" wx:if="{{uiMode === 'elder'}}">
+                <text>已为您简化显示。如需查看完整业绩、交易规则与常见问题，可切换到普通版。</text>
+              </view>
+
+              <view class="detail-section" wx:if="{{uiMode !== 'elder' && item.cardData.product.spotlight.title}}">
+                <text class="section-kicker">亮点</text>
+                <text class="section-title">{{item.cardData.product.spotlight.title}}</text>
+                <text class="section-body">{{item.cardData.product.spotlight.body}}</text>
+              </view>
+
+              <view class="detail-section" wx:if="{{uiMode !== 'elder'}}">
+                <view class="section-title-row">
+                  <text class="section-title">业绩走势</text>
+                  <text class="section-side">成立以来累计 {{item.cardData.product.performance.since_inception_return}}</text>
+                </view>
+                <view class="perf-chart">
+                  <view wx:for="{{item.cardData.product.performance.bars}}" wx:for-item="bar" wx:key="index" class="perf-bar-slot">
+                    <view class="perf-bar" style="height: {{bar}}%;"></view>
+                  </view>
+                </view>
+                <view class="perf-dates">
+                  <text>{{item.cardData.product.performance.start_date}}</text>
+                  <text>{{item.cardData.product.performance.end_date}}</text>
+                </view>
+                <view class="perf-table">
+                  <view class="perf-row perf-head">
+                    <text>时间区间</text>
+                    <text>区间涨跌幅</text>
+                    <text>年化收益率</text>
+                  </view>
+                  <view class="perf-row" wx:for="{{item.cardData.product.performance.periods}}" wx:for-item="period" wx:key="label">
+                    <text>{{period.label}}</text>
+                    <text class="perf-up">{{period.change}}</text>
+                    <text class="perf-up">{{period.annualized}}</text>
+                  </view>
+                </view>
+              </view>
+
+              <view class="detail-section" wx:if="{{uiMode !== 'elder'}}">
+                <text class="section-title">交易规则</text>
+                <view class="rule-timeline">
+                  <view class="rule-step" wx:for="{{item.cardData.product.rules.timeline}}" wx:for-item="step" wx:key="*this">
+                    <view class="rule-dot"></view>
+                    <text>{{step}}</text>
+                  </view>
+                </view>
+                <view class="rule-note" wx:if="{{item.cardData.product.rules.closed_note}}">{{item.cardData.product.rules.closed_note}}</view>
+                <view class="rule-table">
+                  <view class="rule-item">
+                    <text class="rule-key">销售时间</text>
+                    <text class="rule-val">{{item.cardData.product.rules.sale_time}}</text>
+                  </view>
+                  <view class="rule-item">
+                    <text class="rule-key">购买费率</text>
+                    <text class="rule-val">{{item.cardData.product.rules.buy_fee}}</text>
+                  </view>
+                  <view class="rule-item">
+                    <text class="rule-key">确认份额</text>
+                    <text class="rule-val">{{item.cardData.product.rules.confirm_rule}}</text>
+                  </view>
+                  <view class="rule-item">
+                    <text class="rule-key">撤单规则</text>
+                    <text class="rule-val">{{item.cardData.product.rules.cancel_rule}}</text>
+                  </view>
+                  <view class="rule-item">
+                    <text class="rule-key">赎回费率</text>
+                    <text class="rule-val">{{item.cardData.product.rules.redeem_fee}}</text>
+                  </view>
+                  <view class="rule-item">
+                    <text class="rule-key">赎回方式</text>
+                    <text class="rule-val">{{item.cardData.product.rules.redeem_way}}</text>
+                  </view>
+                  <view class="rule-item">
+                    <text class="rule-key">到账时间</text>
+                    <text class="rule-val">{{item.cardData.product.rules.arrival}}</text>
+                  </view>
+                </view>
+              </view>
+
+              <view class="detail-section" wx:if="{{uiMode !== 'elder'}}">
+                <text class="section-title">产品档案</text>
+                <text class="section-body">{{item.cardData.product.issuer}}发行，本行代销</text>
+                <text class="benchmark-title">投资方向</text>
+                <view class="rule-table">
+                  <view class="rule-item" wx:for="{{item.cardData.product.allocations}}" wx:for-item="alloc" wx:key="name">
+                    <text class="rule-key">{{alloc.name}}</text>
+                    <text class="rule-val">{{alloc.limit}}</text>
+                  </view>
+                </view>
+                <text class="section-body">{{item.cardData.product.asset_direction}}</text>
+              </view>
+
+              <view class="detail-section" wx:if="{{uiMode !== 'elder'}}">
+                <text class="section-title">常见问题</text>
+                <view class="faq-item" wx:for="{{item.cardData.product.faqs}}" wx:for-item="faq" wx:key="q">
+                  <text class="faq-q">{{faq.q}}</text>
+                  <text class="faq-a">{{faq.a}}</text>
+                </view>
+              </view>
+
+              <button
+                class="cmb-buy-btn"
+                catchtap="triggerQuickBuy"
+                data-pid="{{item.cardData.product.product_id}}"
+                data-pname="{{item.cardData.product.name}}"
+                data-min="{{item.cardData.product.min_amount}}">
+                购买 (¥{{item.cardData.product.min_amount}}起)
+              </button>
+            </view>
+
+          </view>
+        </view>
+
+      </block>
+
+      <!-- 2026-10-23 新增：等待期间用内联「正在输入」气泡，取代全屏阻塞 loading -->
+      <view id="typing-indicator" class="chat-row ai-row" wx:if="{{sending}}">
+        <view class="ai-avatar-wrap">
+          <image class="avatar-logo" src="/images/avatar-assistant.png" mode="aspectFill"></image>
+        </view>
+        <view class="msg-content">
+          <view class="msg-bubble ai-bubble typing-bubble">
+            <view class="typing-dot"></view>
+            <view class="typing-dot"></view>
+            <view class="typing-dot"></view>
+          </view>
+        </view>
+      </view>
+    </view>
+  </scroll-view>
+
+  <!-- 底部固定输入栏 -->
+  <view class="bottom-bar">
+    <input 
+      class="input-control" 
+      type="text" 
+      value="{{inputContent}}" 
+      placeholder="输入业务指令或点击引导按钮..." 
+      placeholder-class="input-placeholder"
+      bindinput="onInput"
+      confirm-type="send"
+      bindconfirm="sendMessage"
+      maxlength="200"
+      disabled="{{sending}}"
+    />
+    <button class="send-action-btn {{sending ? 'is-sending' : ''}}" bindtap="sendMessage" disabled="{{sending}}">{{sending ? '发送中' : '发送'}}</button>
+  </view>
+
+  <!-- 理财申购金额面板 -->
+  <view class="purchase-mask" wx:if="{{purchaseSheetVisible}}" bindtap="closePurchaseSheet"></view>
+  <view class="purchase-sheet {{purchaseSheetVisible ? 'show' : ''}}" wx:if="{{purchaseSheetVisible}}">
+    <view class="purchase-sheet-handle"></view>
+    <view class="purchase-sheet-head">
+      <text class="purchase-sheet-title">填写申购金额</text>
+      <text class="purchase-sheet-close" bindtap="closePurchaseSheet">关闭</text>
+    </view>
+    <view class="purchase-product-card">
+      <text class="purchase-product-name">{{purchaseForm.productName}}</text>
+      <text class="purchase-product-min">起购 ¥{{purchaseForm.minAmount}}</text>
+    </view>
+    <view class="purchase-field">
+      <text class="purchase-field-label">申购金额（元）</text>
+      <view class="purchase-input-wrap {{purchaseAmountError ? 'has-error' : ''}}">
+        <text class="purchase-currency">¥</text>
+        <input
+          class="purchase-input"
+          type="digit"
+          focus="{{purchaseSheetVisible}}"
+          value="{{purchaseForm.amountInput}}"
+          placeholder="请输入申购金额"
+          placeholder-class="purchase-placeholder"
+          bindinput="onPurchaseAmountInput"
+          bindconfirm="submitPurchase"
+        />
+      </view>
+      <text class="purchase-hint" wx:if="{{!purchaseAmountError}}">请输入大于等于起购金额的数值</text>
+      <text class="purchase-error" wx:if="{{purchaseAmountError}}">{{purchaseAmountError}}</text>
+    </view>
+    <view class="purchase-actions">
+      <button class="purchase-cancel-btn" bindtap="closePurchaseSheet">取消</button>
+      <button
+        class="purchase-submit-btn {{purchaseCanSubmit ? '' : 'disabled'}}"
+        bindtap="submitPurchase"
+        disabled="{{!purchaseCanSubmit}}">
+        确认申购
+      </button>
+    </view>
+  </view>
+
+  <view class="purchase-mask" wx:if="{{pinSheet.visible}}" bindtap="closePinSheet"></view>
+  <view class="purchase-sheet {{pinSheet.visible ? 'show' : ''}}" wx:if="{{pinSheet.visible}}">
+    <view class="purchase-sheet-handle"></view>
+    <view class="purchase-sheet-head">
+      <text class="purchase-sheet-title">{{pinSheet.title}}</text>
+      <text class="purchase-sheet-close" bindtap="closePinSheet">关闭</text>
+    </view>
+    <text class="pin-summary">{{pinSheet.summary}}</text>
+    <view class="fraud-box {{pinSheet.fraud.level}}" wx:if="{{pinSheet.fraud}}">
+      <text class="fraud-title">{{pinSheet.fraud.title}}</text>
+      <text class="fraud-line" wx:for="{{pinSheet.fraud.warnings}}" wx:for-item="warn" wx:key="*this">{{warn}}</text>
+    </view>
+    <view class="risk-ack" wx:if="{{pinSheet.fraud && pinSheet.fraud.require_ack}}" bindtap="toggleRiskAck">
+      <view class="risk-ack-box {{pinSheet.riskAck ? 'checked' : ''}}"></view>
+      <text>我已核实收款人，确认为本人操作，并了解上述诈骗风险</text>
+    </view>
+    <view class="purchase-field">
+      <text class="purchase-field-label">交易密码</text>
+      <input
+        class="login-input"
+        password
+        maxlength="6"
+        type="number"
+        focus="{{pinSheet.visible}}"
+        value="{{pinSheet.password}}"
+        placeholder="请输入 6 位交易密码"
+        placeholder-class="input-placeholder"
+        bindinput="onPinInput"
+        bindconfirm="submitPin"
+      />
+      <text class="purchase-hint">请输入开户时设置的 6 位交易密码</text>
+      <text class="purchase-error" wx:if="{{pinSheet.error}}">{{pinSheet.error}}</text>
+    </view>
+    <view class="purchase-actions">
+      <button class="purchase-cancel-btn" bindtap="closePinSheet">取消</button>
+      <button class="purchase-submit-btn" bindtap="submitPin">确认</button>
+    </view>
+  </view>
+  </block>
+</view>
